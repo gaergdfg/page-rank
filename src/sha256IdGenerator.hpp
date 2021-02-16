@@ -6,7 +6,7 @@
 
 class Sha256IdGenerator : public IdGenerator {
 public:
-    virtual PageId generateId(std::string const& /*content*/) const
+    virtual PageId generateId(std::string const& /*content*/) const /*override*/
     {
         return PageId("");
     }
