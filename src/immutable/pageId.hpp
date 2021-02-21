@@ -33,7 +33,7 @@ public:
     };
 };
 
-std::ostream& operator<<(std::ostream& out, PageId const& pageId)
+inline std::ostream& operator<<(std::ostream& out, PageId const& pageId)
 {
     out << pageId.id;
     return out;

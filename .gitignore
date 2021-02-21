@@ -5,6 +5,8 @@ CMakeCache.txt
 cmake_install.cmake
 Makefile
 
+FlameGraph/
+
 tests/
 !tests/*.txt
 !tests/*.cpp

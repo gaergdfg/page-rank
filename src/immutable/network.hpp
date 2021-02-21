@@ -41,7 +41,7 @@ private:
     friend std::ostream& operator<<(std::ostream& out, Network const& page);
 };
 
-std::ostream& operator<<(std::ostream& out, Network const& network)
+inline std::ostream& operator<<(std::ostream& out, Network const& network)
 {
     return printContainer(out, network.pages);
 }
