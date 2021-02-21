@@ -26,7 +26,7 @@ public:
     	std::unordered_map<PageId, std::vector<PageId>, PageIdHash> edges;
 
         auto& pages = network.getPages();
-        auto preprocessWorker = [
+        auto idGeneratorWorker = [
             &network, &pages
         ](size_t start, size_t end) {
             for (size_t i = start; i < end; i++) {
@@ -37,8 +37,8 @@ public:
         std::thread threads[numThreads];
         size_t last_index = 0;
         for (uint32_t i = 0; i < numThreads; i++) {
-            threads[i] = std::thread{
-                preprocessWorker,
+            threads[i] = std::thread {
+                idGeneratorWorker,
                 last_index,
                 last_index + network.getSize() / numThreads + (i < network.getSize() % numThreads ? 1 : 0)
             };
@@ -74,6 +74,7 @@ public:
         double difference;
 
         std::mutex dangleSumMutex;
+        std::mutex differenceMutex;
 
         auto dangleSumWorker = [&dangleSum, &dangleSumMutex, &pageHashMap, &danglingNodes](size_t start, size_t end) {
             double localDangleSum = 0.0;
@@ -87,9 +88,10 @@ public:
         };
 
         auto pageRankWorker = [
-            &network, &pages, &alpha, &dangleSum,
+            &network, &pages, &alpha, &dangleSum, &difference, &differenceMutex,
             &pageHashMap, &previousPageHashMap, &edges, &numLinks
         ](size_t start, size_t end) {
+            double localDifference = 0.0;
             for (size_t i = start; i < end; i++) {
                 PageId pageId = pages[i].getId();
 
@@ -101,6 +103,12 @@ public:
                         pageHashMap[pageId] += alpha * previousPageHashMap[link] / numLinks[link];
                     }
                 }
+
+                localDifference += std::abs(previousPageHashMap[pages[i].getId()] - pageHashMap[pages[i].getId()]);
+            }
+            {
+                std::lock_guard<std::mutex> lock(differenceMutex);
+                difference += localDifference;
             }
         };
 
@@ -111,7 +119,7 @@ public:
 
             last_index = 0;
             for (uint32_t t = 0; t < numThreads; t++) {
-                threads[t] = std::thread{
+                threads[t] = std::thread {
                     dangleSumWorker,
                     last_index,
                     last_index + danglingNodes.size() / numThreads + (t < danglingNodes.size() % numThreads ? 1 : 0)
@@ -126,7 +134,7 @@ public:
 
             last_index = 0;
             for (uint32_t t = 0; t < numThreads; t++) {
-                threads[t] = std::thread{
+                threads[t] = std::thread {
                     pageRankWorker,
                     last_index,
                     last_index + network.getSize() / numThreads + (t < network.getSize() % numThreads ? 1 : 0)
@@ -136,10 +144,6 @@ public:
             }
             for (uint32_t t = 0; t < numThreads; t++) {
                 threads[t].join();
-            }
-
-            for (auto page : pages) {
-                difference += std::abs(previousPageHashMap[page.getId()] - pageHashMap[page.getId()]);
             }
 
             if (difference < tolerance) {
