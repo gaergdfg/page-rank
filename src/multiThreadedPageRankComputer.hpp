@@ -31,7 +31,10 @@ public:
         std::mutex edgesMutex;
 
         auto& pages = network.getPages();
-        auto preprocessWorker = [&](size_t start, size_t end) {
+        auto preprocessWorker = [
+            &network, &pages, &pageHashMap, &numLinks, &danglingNodes, &edges,
+            &pageHashMapMutex, &numLinksMutex, &danglingNodesMutex, &edgesMutex
+        ](size_t start, size_t end) {
             for (size_t i = start; i < end; i++) {
                 pages[i].generateId(network.getGenerator());
                 {
@@ -88,7 +91,7 @@ public:
         std::mutex dangleSumMutex;
         std::mutex differenceMutex;
 
-        auto dangleSumWorker = [&](size_t start, size_t end) {
+        auto dangleSumWorker = [&dangleSum, &dangleSumMutex, &pageHashMap, &danglingNodes](size_t start, size_t end) {
             for (size_t i = start; i < end; i++) {
                 {
                     std::lock_guard<std::mutex> lock(dangleSumMutex);
@@ -97,7 +100,10 @@ public:
             }
         };
 
-        auto pageRankWorker = [&](size_t start, size_t end) {
+        auto pageRankWorker = [
+            &network, &pages, &alpha, &dangleSum, &difference, &differenceMutex,
+            &pageHashMap, &previousPageHashMap, &edges, &numLinks
+        ](size_t start, size_t end) {
             for (size_t i = start; i < end; i++) {
                 PageId pageId = pages[i].getId();
 
