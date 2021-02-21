@@ -22,17 +22,16 @@ public:
     {
         std::unordered_map<PageId, PageRank, PageIdHash> pageHashMap;
         std::unordered_map<PageId, uint32_t, PageIdHash> numLinks;
-        std::unordered_set<PageId, PageIdHash> danglingNodes;
+        std::unordered_set<PageId, PageIdHash> danglingNodes;  // TODO: make it a vector
     	std::unordered_map<PageId, std::vector<PageId>, PageIdHash> edges;
 
-        // TODO: are the mutexes necessary since we dont modify index's value twice?
         std::mutex pageHashMapMutex;
         std::mutex numLinksMutex;
         std::mutex danglingNodesMutex;
         std::mutex edgesMutex;
 
         auto preprocessWorker = [&](size_t start, size_t end) {
-            auto pages = network.getPages();
+            auto& pages = network.getPages();
             for (size_t i = start; i < end; i++) {
                 pages[i].generateId(network.getGenerator());
                 {
@@ -83,18 +82,21 @@ public:
         }
 
         std::unordered_map<PageId, PageRank, PageIdHash> previousPageHashMap;
-        std::atomic<double> dangleSum;
-        std::atomic<double> difference;
+        double dangleSum;
+        double difference;
+
+        std::mutex dangleSumMutex;
+        std::mutex differenceMutex;
 
         auto dangleSumWorker = [&](size_t start, size_t end) {
             auto pages = network.getPages();
 
             for (size_t i = start; i < end; i++) {
                 if (pages[i].getLinks().size() == 0) {
-                    for (
-                        double currDangleSum = dangleSum;
-                        !dangleSum.compare_exchange_weak(currDangleSum, currDangleSum + pageHashMap[pages[i].getId()]);
-                    );
+                    {
+                        std::lock_guard<std::mutex> lock(dangleSumMutex);
+                        dangleSum += pageHashMap[pages[i].getId()];
+                    }
                 }
             }
         };
@@ -106,17 +108,17 @@ public:
                 PageId pageId = pages[i].getId();
 
                 double danglingWeight = 1.0 / network.getSize();
-                pageHashMap[pages[i].getId()] = dangleSum * danglingWeight + (1.0 - alpha) / network.getSize();
+                pageHashMap[pageId] = dangleSum * danglingWeight + (1.0 - alpha) / network.getSize();
 
                 if (edges.count(pageId) > 0) {
                     for (auto link : edges[pageId]) {
-                        pageHashMap[pages[i].getId()] += alpha * previousPageHashMap[link] / numLinks[link];
+                        pageHashMap[pageId] += alpha * previousPageHashMap[link] / numLinks[link];
                     }
                 }
-                for (
-                    double currDifference = difference;
-                    !dangleSum.compare_exchange_weak(currDifference, std::abs(previousPageHashMap[pageId] - pageHashMap[pageId]));
-                );
+                {
+                    std::lock_guard<std::mutex> lock(differenceMutex);
+                    difference += std::abs(previousPageHashMap[pageId] - pageHashMap[pageId]);
+                }
             }
         };
 
@@ -138,6 +140,7 @@ public:
             for (uint32_t t = 0; t < numThreads; t++) {
                 threads[t].join();
             }
+            dangleSum *= alpha;
 
             last_index = 0;
             for (uint32_t t = 0; t < numThreads; t++) {

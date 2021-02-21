@@ -41,17 +41,19 @@ int main()
 
     SimpleIdGenerator idGenerator("b7628d82a284526971095162ba34be8bc05c6e06b9face83b46c2813f7f2157b");
     SimpleNetworkGenerator networkGenerator(idGenerator);
-    for (auto computer : computersToTest) {
 
+    int nr = 0;
+    for (auto computer : computersToTest) {
+        std::cout << "Testing computer #" << nr++ << std::endl << "=======================================================" << std::endl;
         for (auto scenario : scenarios) {
-            // std::cout << "Starting scenario with numberOfNodes=" << scenario.numberOfNodes << ", alpha=" << scenario.alpha << std::endl;
+            std::cout << "Starting scenario with numberOfNodes=" << scenario.numberOfNodes << ", alpha=" << scenario.alpha << std::endl;
             auto result = computer->computeForNetwork(
                 networkGenerator.generateNetworkOfSize(scenario.numberOfNodes),
                 scenario.alpha,
                 scenario.iterations,
                 scenario.tolerance);
             ResultVerificator::verifyResults(result, scenario.expectedResult, networkGenerator);
-            // std::cout << "Scenario finished with successed" << std::endl;
+            std::cout << "Scenario finished with successed" << std::endl;
         }
     }
 
