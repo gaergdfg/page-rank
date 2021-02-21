@@ -26,9 +26,9 @@ set -e
 cmake -DCMAKE_BUILD_TYPE=Release .
 make
 
-# ./tests/sha256Test
+./tests/sha256Test
 ./tests/pageRankCalculationTest
 ./tests/pageRankPerformanceTest
 
-# ./tests/e2eTest < ./tests/e2eScenario.txt
-# for i in 1 2 3 4 8; do ./tests/e2eTest $i < ./tests/e2eScenario.txt; done
+./tests/e2eTest < ./tests/e2eScenario.txt
+for i in 1 2 3 4 8; do ./tests/e2eTest $i < ./tests/e2eScenario.txt; done

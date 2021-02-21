@@ -25,47 +25,12 @@ public:
         std::vector<PageId> danglingNodes;
     	std::unordered_map<PageId, std::vector<PageId>, PageIdHash> edges;
 
-        std::mutex pageHashMapMutex;
-        std::mutex numLinksMutex;
-        std::mutex danglingNodesMutex;
-        std::mutex edgesMutex;
-
         auto& pages = network.getPages();
         auto preprocessWorker = [
-            &network, &pages, &pageHashMap, &numLinks, &danglingNodes, &edges,
-            &pageHashMapMutex, &numLinksMutex, &danglingNodesMutex, &edgesMutex
+            &network, &pages
         ](size_t start, size_t end) {
             for (size_t i = start; i < end; i++) {
                 pages[i].generateId(network.getGenerator());
-                {
-                    std::lock_guard<std::mutex> lock(pageHashMapMutex);
-                    pageHashMap[pages[i].getId()] = 1.0 / network.getSize();
-                }
-            }
-
-            for (size_t i = start; i < end; i++) {
-                {
-                    std::lock_guard<std::mutex> lock(numLinksMutex);
-                    numLinks[pages[i].getId()] = pages[i].getLinks().size();
-                }
-            }
-
-            for (size_t i = start; i < end; i++) {
-                if (pages[i].getLinks().size() == 0) {
-                    {
-                        std::lock_guard<std::mutex> lock(danglingNodesMutex);
-                        danglingNodes.push_back(pages[i].getId());
-                    }
-                }
-            }
-
-            for (size_t i = start; i < end; i++) {
-                for (auto link : pages[i].getLinks()) {
-                    {
-                        std::lock_guard<std::mutex> lock(edgesMutex);
-                        edges[link].push_back(pages[i].getId());
-                    }
-                }
             }
         };
 
@@ -84,24 +49,45 @@ public:
             threads[i].join();
         }
 
+        for (auto const& page : network.getPages()) {
+            pageHashMap[page.getId()] = 1.0 / network.getSize();
+        }
+
+        for (auto page : network.getPages()) {
+            numLinks[page.getId()] = page.getLinks().size();
+        }
+
+        for (auto page : network.getPages()) {
+            if (page.getLinks().size() == 0) {
+                danglingNodes.push_back(page.getId());
+            }
+        }
+
+        for (auto page : network.getPages()) {
+            for (auto link : page.getLinks()) {
+                edges[link].push_back(page.getId());
+            }
+        }
+
         std::unordered_map<PageId, PageRank, PageIdHash> previousPageHashMap;
         double dangleSum;
         double difference;
 
         std::mutex dangleSumMutex;
-        std::mutex differenceMutex;
 
         auto dangleSumWorker = [&dangleSum, &dangleSumMutex, &pageHashMap, &danglingNodes](size_t start, size_t end) {
+            double localDangleSum = 0.0;
             for (size_t i = start; i < end; i++) {
-                {
-                    std::lock_guard<std::mutex> lock(dangleSumMutex);
-                    dangleSum += pageHashMap[danglingNodes[i]];
-                }
+                localDangleSum += pageHashMap[danglingNodes[i]];
+            }
+            {
+                std::lock_guard<std::mutex> lock(dangleSumMutex);
+                dangleSum += localDangleSum;
             }
         };
 
         auto pageRankWorker = [
-            &network, &pages, &alpha, &dangleSum, &difference, &differenceMutex,
+            &network, &pages, &alpha, &dangleSum,
             &pageHashMap, &previousPageHashMap, &edges, &numLinks
         ](size_t start, size_t end) {
             for (size_t i = start; i < end; i++) {
@@ -114,10 +100,6 @@ public:
                     for (auto link : edges[pageId]) {
                         pageHashMap[pageId] += alpha * previousPageHashMap[link] / numLinks[link];
                     }
-                }
-                {
-                    std::lock_guard<std::mutex> lock(differenceMutex);
-                    difference += std::abs(previousPageHashMap[pageId] - pageHashMap[pageId]);
                 }
             }
         };
@@ -154,6 +136,10 @@ public:
             }
             for (uint32_t t = 0; t < numThreads; t++) {
                 threads[t].join();
+            }
+
+            for (auto page : pages) {
+                difference += std::abs(previousPageHashMap[page.getId()] - pageHashMap[page.getId()]);
             }
 
             if (difference < tolerance) {
