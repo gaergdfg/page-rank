@@ -12,7 +12,7 @@ set -e
 # cmake -DCMAKE_BUILD_TYPE=Debug .
 # make
 
-# /usr/bin/valgrind valgrind --error-exitcode=123 --leak-check=full ./tests/pageRankCalculationTest
+/usr/bin/valgrind valgrind --error-exitcode=123 --leak-check=full ./tests/pageRankCalculationTest
 
 # ./tests/sha256Test
 # ./tests/pageRankCalculationTest

@@ -4,6 +4,7 @@
 #include <atomic>
 #include <mutex>
 #include <thread>
+#include <vector>
 
 #include <unordered_map>
 #include <unordered_set>
@@ -22,7 +23,7 @@ public:
     {
         std::unordered_map<PageId, PageRank, PageIdHash> pageHashMap;
         std::unordered_map<PageId, uint32_t, PageIdHash> numLinks;
-        std::unordered_set<PageId, PageIdHash> danglingNodes;  // TODO: make it a vector
+        std::vector<PageId> danglingNodes;
     	std::unordered_map<PageId, std::vector<PageId>, PageIdHash> edges;
 
         std::mutex pageHashMapMutex;
@@ -30,8 +31,8 @@ public:
         std::mutex danglingNodesMutex;
         std::mutex edgesMutex;
 
+        auto& pages = network.getPages();
         auto preprocessWorker = [&](size_t start, size_t end) {
-            auto& pages = network.getPages();
             for (size_t i = start; i < end; i++) {
                 pages[i].generateId(network.getGenerator());
                 {
@@ -51,7 +52,7 @@ public:
                 if (pages[i].getLinks().size() == 0) {
                     {
                         std::lock_guard<std::mutex> lock(danglingNodesMutex);
-                        danglingNodes.insert(pages[i].getId());
+                        danglingNodes.push_back(pages[i].getId());
                     }
                 }
             }
@@ -89,21 +90,15 @@ public:
         std::mutex differenceMutex;
 
         auto dangleSumWorker = [&](size_t start, size_t end) {
-            auto pages = network.getPages();
-
             for (size_t i = start; i < end; i++) {
-                if (pages[i].getLinks().size() == 0) {
-                    {
-                        std::lock_guard<std::mutex> lock(dangleSumMutex);
-                        dangleSum += pageHashMap[pages[i].getId()];
-                    }
+                {
+                    std::lock_guard<std::mutex> lock(dangleSumMutex);
+                    dangleSum += pageHashMap[danglingNodes[i]];
                 }
             }
         };
 
         auto pageRankWorker = [&](size_t start, size_t end) {
-            auto pages = network.getPages();
-
             for (size_t i = start; i < end; i++) {
                 PageId pageId = pages[i].getId();
 
@@ -132,10 +127,10 @@ public:
                 threads[t] = std::thread{
                     dangleSumWorker,
                     last_index,
-                    last_index + network.getSize() / numThreads + (t < network.getSize() % numThreads ? 1 : 0)
+                    last_index + danglingNodes.size() / numThreads + (t < danglingNodes.size() % numThreads ? 1 : 0)
                 };
 
-                last_index += network.getSize() / numThreads + (t < network.getSize() % numThreads ? 1 : 0);
+                last_index += danglingNodes.size() / numThreads + (t < danglingNodes.size() % numThreads ? 1 : 0);
             }
             for (uint32_t t = 0; t < numThreads; t++) {
                 threads[t].join();
