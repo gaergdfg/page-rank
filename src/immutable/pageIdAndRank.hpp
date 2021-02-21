@@ -30,7 +30,7 @@ private:
     friend class PageIdAndRankComparable;
 };
 
-inline std::ostream& operator<<(std::ostream& out, PageIdAndRank const& pageIdAndRank)
+std::ostream& operator<<(std::ostream& out, PageIdAndRank const& pageIdAndRank)
 {
     out << "(" << pageIdAndRank.pageId << ", " << pageIdAndRank.pageRank << ")";
     return out;

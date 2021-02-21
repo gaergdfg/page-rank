@@ -53,7 +53,7 @@ private:
     friend std::ostream& operator<<(std::ostream& out, Page const& page);
 };
 
-inline std::ostream& operator<<(std::ostream& out, Page const& page)
+std::ostream& operator<<(std::ostream& out, Page const& page)
 {
     out << "(";
     out << (page.isIdComputed ? page.id : std::string("NO_ID"));
